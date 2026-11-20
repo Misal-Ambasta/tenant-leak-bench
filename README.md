@@ -154,6 +154,17 @@ Locally without Docker (Python 3.11, `pip install -r requirements.txt`):
 
 ## Model run results
 
+Fill this table with `run_eval.sh`. Give it one finished solver workspace per
+attempt. It grades each workspace in the grader image with networking off and
+prints a row; `--append` writes the row here.
+
+```bash
+./run_eval.sh --append claude-opus-5-5 runs/opus/attempt-*/
+./run_eval.sh --local --notes "no tool use" some-model ws1 ws2   # grade without Docker
+```
+
+Without `--notes`, the Notes column lists the three groups that failed most often.
+
 | Date | Model | Attempts | Mean score | Pass rate | Notes |
 |---|---|---|---|---|---|
 | | | | | | |
