@@ -1,5 +1,11 @@
 # tenant-leak-bench
 
+> **Public demo.** This repository includes the hidden tests, reference fix and
+> wrong-fix patches by design, so the task can be inspected end to end. Because
+> they are public, this copy is a portfolio piece, not a contamination-free
+> evaluation. To use it as a real eval, keep `tests/hidden/`, `verify.py` and
+> the patches private, and give solvers only the `solver` Docker target.
+
 A self-contained coding task for training and evaluating coding agents. The
 solver gets a small multi-tenant FastAPI permissions service (in-memory, no
 external services) and an issue describing only the symptom. The goal is to
@@ -154,7 +160,22 @@ Locally without Docker (Python 3.11, `pip install -r requirements.txt`):
 
 ## Model run results
 
-Fill this table with `run_eval.sh`. Give it one finished solver workspace per
+`run_models.sh` runs the whole loop: `./run_models.sh -n 5 [-m MODEL]`. For each
+attempt it:
+
+- exports a fresh solver workspace from `HEAD` (`app/`, `tests/visible/`,
+  `task.md` and `requirements.txt` only) to a directory outside the repo, and
+  aborts if any grader material is present;
+- runs headless `claude -p` in `dontAsk` mode. Read, Glob, Grep, Edit and Write
+  are allowed only inside that workspace, Bash only for `pytest tests/visible`,
+  and user settings, MCP and web tools are off;
+- scans the transcript for references to the repo, `tests/hidden`, `verify.py`
+  or the patches, and excludes any contaminated attempt;
+- grades the clean attempts with `run_eval.sh --append`. Before any attempt
+  starts, a preflight checks that the grader image's hidden tests and
+  `verify.py` hash-match `HEAD`.
+
+To grade workspaces you produced some other way, use `run_eval.sh`. Give it one finished solver workspace per
 attempt. It grades each workspace in the grader image with networking off and
 prints a row; `--append` writes the row here.
 
