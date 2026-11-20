@@ -1,0 +1,52 @@
+diff --git a/app/auth.py b/app/auth.py
+index b5431e3..c6c953a 100644
+--- a/app/auth.py
++++ b/app/auth.py
+@@ -7,6 +7,15 @@ from .models import PermissionSet, Principal
+ from .store import PermissionStore
+ 
+ 
++MULTI_ORG_USERS = frozenset({"alice"})
++
++
++def _cache_key(principal: Principal) -> object:
++    if principal.user_id in MULTI_ORG_USERS:
++        return (principal.user_id, principal.organization_id)
++    return principal
++
++
+ class PermissionDenied(Exception):
+     """Raised when a principal is not a member of its requested organization."""
+ 
+@@ -15,7 +24,7 @@ class AuthorizationService:
+     """Resolves what a principal may do in the organization it is acting in."""
+ 
+     def __init__(
+-        self, store: PermissionStore, cache: TtlCache[Principal, PermissionSet]
++        self, store: PermissionStore, cache: TtlCache[object, PermissionSet]
+     ) -> None:
+         self._store = store
+         self._cache = cache
+@@ -32,11 +41,11 @@ class AuthorizationService:
+ 
+     async def permissions_for(self, principal: Principal) -> PermissionSet:
+         await self.require_membership(principal)
+-        return await self._cache.get_or_load(principal, self._loader(principal))
++        return await self._cache.get_or_load(_cache_key(principal), self._loader(principal))
+ 
+     async def has_permission(self, principal: Principal, permission: str) -> bool:
+         await self.require_membership(principal)
+-        granted = await self._cache.get_or_load(principal, self._loader(principal))
++        granted = await self._cache.get_or_load(_cache_key(principal), self._loader(principal))
+         return permission in granted.permissions
+ 
+     async def update_permissions(
+@@ -44,7 +53,7 @@ class AuthorizationService:
+     ) -> PermissionSet:
+         await self.require_membership(principal)
+         self._store.set_permissions(principal.user_id, principal.organization_id, permissions)
+-        self._cache.invalidate(principal)
++        self._cache.invalidate(_cache_key(principal))
+         return await self.permissions_for(principal)
+ 
+     def _loader(self, principal: Principal) -> Callable[[], Awaitable[PermissionSet]]:

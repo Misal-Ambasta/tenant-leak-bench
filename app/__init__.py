@@ -1,0 +1,2 @@
+"""Tenant permissions service."""
+

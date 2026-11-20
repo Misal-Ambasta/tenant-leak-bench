@@ -1,0 +1,21 @@
+diff --git a/app/models.py b/app/models.py
+index 5709a7d..b15f118 100644
+--- a/app/models.py
++++ b/app/models.py
+@@ -1,6 +1,6 @@
+ """Domain models shared by the permissions service."""
+ 
+-from dataclasses import dataclass, field
++from dataclasses import dataclass
+ 
+ 
+ @dataclass(frozen=True)
+@@ -21,7 +21,7 @@ class Principal:
+     """
+ 
+     user_id: str
+-    organization_id: str = field(compare=False)
++    organization_id: str
+ 
+ 
+ @dataclass(frozen=True)

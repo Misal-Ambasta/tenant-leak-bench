@@ -1,0 +1,34 @@
+diff --git a/app/auth.py b/app/auth.py
+index b5431e3..77ff060 100644
+--- a/app/auth.py
++++ b/app/auth.py
+@@ -26,17 +26,18 @@ class AuthorizationService:
+         Membership is read on every call, independently of the permission
+         cache, so removing a member takes effect immediately.
+         """
++        self._active_org = principal.organization_id
+         user = await self._store.get_user(principal.user_id)
+         if user is None or principal.organization_id not in user.organizations:
+             raise PermissionDenied(principal.organization_id)
+ 
+     async def permissions_for(self, principal: Principal) -> PermissionSet:
+         await self.require_membership(principal)
+-        return await self._cache.get_or_load(principal, self._loader(principal))
++        return await self._cache.get_or_load((principal.user_id, self._active_org), self._loader(principal))
+ 
+     async def has_permission(self, principal: Principal, permission: str) -> bool:
+         await self.require_membership(principal)
+-        granted = await self._cache.get_or_load(principal, self._loader(principal))
++        granted = await self._cache.get_or_load((principal.user_id, self._active_org), self._loader(principal))
+         return permission in granted.permissions
+ 
+     async def update_permissions(
+@@ -44,7 +45,7 @@ class AuthorizationService:
+     ) -> PermissionSet:
+         await self.require_membership(principal)
+         self._store.set_permissions(principal.user_id, principal.organization_id, permissions)
+-        self._cache.invalidate(principal)
++        self._cache.invalidate((principal.user_id, self._active_org))
+         return await self.permissions_for(principal)
+ 
+     def _loader(self, principal: Principal) -> Callable[[], Awaitable[PermissionSet]]:

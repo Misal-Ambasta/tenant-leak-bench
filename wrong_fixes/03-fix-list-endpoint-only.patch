@@ -1,0 +1,32 @@
+diff --git a/app/auth.py b/app/auth.py
+index b5431e3..036ff19 100644
+--- a/app/auth.py
++++ b/app/auth.py
+@@ -15,7 +15,7 @@ class AuthorizationService:
+     """Resolves what a principal may do in the organization it is acting in."""
+ 
+     def __init__(
+-        self, store: PermissionStore, cache: TtlCache[Principal, PermissionSet]
++        self, store: PermissionStore, cache: TtlCache[object, PermissionSet]
+     ) -> None:
+         self._store = store
+         self._cache = cache
+@@ -32,7 +32,8 @@ class AuthorizationService:
+ 
+     async def permissions_for(self, principal: Principal) -> PermissionSet:
+         await self.require_membership(principal)
+-        return await self._cache.get_or_load(principal, self._loader(principal))
++        key = (principal.user_id, principal.organization_id)
++        return await self._cache.get_or_load(key, self._loader(principal))
+ 
+     async def has_permission(self, principal: Principal, permission: str) -> bool:
+         await self.require_membership(principal)
+@@ -44,7 +45,7 @@ class AuthorizationService:
+     ) -> PermissionSet:
+         await self.require_membership(principal)
+         self._store.set_permissions(principal.user_id, principal.organization_id, permissions)
+-        self._cache.invalidate(principal)
++        self._cache.invalidate((principal.user_id, principal.organization_id))
+         return await self.permissions_for(principal)
+ 
+     def _loader(self, principal: Principal) -> Callable[[], Awaitable[PermissionSet]]:

@@ -1,0 +1,68 @@
+diff --git a/app/auth.py b/app/auth.py
+index b5431e3..9ae0f42 100644
+--- a/app/auth.py
++++ b/app/auth.py
+@@ -3,7 +3,7 @@
+ from collections.abc import Awaitable, Callable, Iterable
+ 
+ from .cache import TtlCache
+-from .models import PermissionSet, Principal
++from .models import PermissionSet, Principal, TenantScope
+ from .store import PermissionStore
+ 
+ 
+@@ -15,7 +15,7 @@ class AuthorizationService:
+     """Resolves what a principal may do in the organization it is acting in."""
+ 
+     def __init__(
+-        self, store: PermissionStore, cache: TtlCache[Principal, PermissionSet]
++        self, store: PermissionStore, cache: TtlCache[TenantScope, PermissionSet]
+     ) -> None:
+         self._store = store
+         self._cache = cache
+@@ -32,11 +32,11 @@ class AuthorizationService:
+ 
+     async def permissions_for(self, principal: Principal) -> PermissionSet:
+         await self.require_membership(principal)
+-        return await self._cache.get_or_load(principal, self._loader(principal))
++        return await self._cache.get_or_load(principal.tenant_scope, self._loader(principal))
+ 
+     async def has_permission(self, principal: Principal, permission: str) -> bool:
+         await self.require_membership(principal)
+-        granted = await self._cache.get_or_load(principal, self._loader(principal))
++        granted = await self._cache.get_or_load(principal.tenant_scope, self._loader(principal))
+         return permission in granted.permissions
+ 
+     async def update_permissions(
+@@ -44,7 +44,7 @@ class AuthorizationService:
+     ) -> PermissionSet:
+         await self.require_membership(principal)
+         self._store.set_permissions(principal.user_id, principal.organization_id, permissions)
+-        self._cache.invalidate(principal)
++        self._cache.invalidate(principal.tenant_scope)
+         return await self.permissions_for(principal)
+ 
+     def _loader(self, principal: Principal) -> Callable[[], Awaitable[PermissionSet]]:
+diff --git a/app/models.py b/app/models.py
+index 5709a7d..433980c 100644
+--- a/app/models.py
++++ b/app/models.py
+@@ -23,6 +23,18 @@ class Principal:
+     user_id: str
+     organization_id: str = field(compare=False)
+ 
++    @property
++    def tenant_scope(self) -> "TenantScope":
++        return TenantScope(self.organization_id, self.user_id)
++
++
++@dataclass(frozen=True)
++class TenantScope:
++    """Identifies a user within one specific organization."""
++
++    organization_id: str
++    user_id: str
++
+ 
+ @dataclass(frozen=True)
+ class PermissionSet:
