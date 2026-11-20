@@ -5,11 +5,13 @@ set -eu
 usage() {
     cat >&2 <<'EOF'
 usage: run_models.sh [-n ATTEMPTS] [-m MODEL] [-o RUNS_DIR] [-t TIMEOUT_SECONDS] [--no-append]
+       run_models.sh -g RUNS_DIR [--no-append]
 
   -n  number of attempts (default 5)
   -m  model passed to `claude --model` (default: the CLI's default model)
   -o  where workspaces and transcripts are kept (default ~/.cache/tenant-leak-bench/runs/<timestamp>)
   -t  wall-clock limit per attempt (default 1800)
+  -g  grade-only: re-audit and grade an existing RUNS_DIR without running the model
   --no-append  print the results row instead of writing it into README.md
 EOF
     exit 2
@@ -17,7 +19,7 @@ EOF
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 IMAGE="${IMAGE:-tenant-leak-bench}"
-ATTEMPTS=5 MODEL="" TIMEOUT=1800 APPEND="--append"
+ATTEMPTS=5 MODEL="" TIMEOUT=1800 APPEND="--append" GRADE_ONLY=0
 RUNS="$HOME/.cache/tenant-leak-bench/runs/$(date +%Y%m%d-%H%M%S)"
 
 while [ $# -gt 0 ]; do
@@ -26,6 +28,7 @@ while [ $# -gt 0 ]; do
         -m) MODEL=$2; shift ;;
         -o) RUNS=$2; shift ;;
         -t) TIMEOUT=$2; shift ;;
+        -g) GRADE_ONLY=1; RUNS=$2; shift ;;
         --no-append) APPEND="" ;;
         *) usage ;;
     esac
@@ -35,7 +38,10 @@ done
 die() { echo "preflight: $*" >&2; exit 1; }
 SOLVER_FILES="app tests/visible task.md requirements.txt"
 FORBIDDEN_IN_WORKSPACE="tests/hidden verify.py validate.sh solution.patch wrong_fixes valid_fixes README.md run_eval.sh run_models.sh .git"
-LEAK_PATTERN="$ROOT|tests/hidden|solution\.patch|wrong_fixes|valid_fixes|verify\.py|\.claude/projects|/tmp/claude-"
+# Claude Code keys ~/.claude/projects and /tmp/claude-<uid> folders by the cwd path, so
+# each attempt's own memory/scratchpad paths are fine; only the repo's key is a leak.
+REPO_KEY=$(printf '%s' "$ROOT" | sed 's#[^A-Za-z0-9]#-#g')
+LEAK_PATTERN="$ROOT|$REPO_KEY|tests/hidden|solution\.patch|wrong_fixes|valid_fixes|verify\.py"
 
 echo "== preflight: grader integrity"
 git -C "$ROOT" diff --quiet HEAD -- tests/hidden verify.py || die "tests/hidden or verify.py differ from HEAD"
@@ -45,6 +51,11 @@ image_hash=$(docker run --rm --network none "$IMAGE" sh -c 'sha256sum verify.py 
 [ "$repo_hash" = "$image_hash" ] || die "grader image is stale (image $image_hash != repo $repo_hash); rebuild it"
 echo "  grader image hidden tests + verify.py match HEAD ($repo_hash)"
 
+if [ "$GRADE_ONLY" -eq 1 ]; then
+    [ -d "$RUNS" ] || die "no such runs dir: $RUNS"
+    ATTEMPTS=$(find "$RUNS" -maxdepth 1 -name 'attempt-*.jsonl' | wc -l)
+    [ "$ATTEMPTS" -gt 0 ] || die "no attempt transcripts in $RUNS"
+fi
 mkdir -p "$RUNS"
 RUNS=$(CDPATH= cd -- "$RUNS" && pwd)
 case "$RUNS/" in "$ROOT"/*) die "runs dir must be outside the repo" ;; esac
@@ -61,6 +72,9 @@ for i in $(seq 1 "$ATTEMPTS"); do
     ws="$RUNS/attempt-$i"
     log="$RUNS/attempt-$i.jsonl"
     echo "== attempt $i/$ATTEMPTS -> $ws"
+    if [ "$GRADE_ONLY" -eq 1 ]; then
+        [ -f "$log" ] && [ -d "$ws/app" ] || die "missing $log or $ws/app"
+    else
     mkdir -p "$ws"
     git -C "$ROOT" archive HEAD $SOLVER_FILES | tar -x -C "$ws"
     for item in $FORBIDDEN_IN_WORKSPACE; do
@@ -88,6 +102,7 @@ for i in $(seq 1 "$ATTEMPTS"); do
     status=$?
     set -e
     echo "  claude exited with status $status"
+    fi
 
     if grep -Eq "$LEAK_PATTERN" "$log"; then
         echo "  !! transcript references grader material; attempt excluded:" >&2

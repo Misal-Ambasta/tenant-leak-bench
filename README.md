@@ -167,7 +167,9 @@ attempt it:
   `task.md` and `requirements.txt` only) to a directory outside the repo, and
   aborts if any grader material is present;
 - runs headless `claude -p` in `dontAsk` mode. Read, Glob, Grep, Edit and Write
-  are allowed only inside that workspace, Bash only for `pytest tests/visible`,
+  are allowed only inside that workspace, Bash only for `pytest tests/visible`
+  and Claude Code's built-in read-only commands (`cat`, `find`, …), which are
+  also confined to the workspace,
   and user settings, MCP and web tools are off;
 - scans the transcript for references to the repo, `tests/hidden`, `verify.py`
   or the patches, and excludes any contaminated attempt;
@@ -188,4 +190,5 @@ Without `--notes`, the Notes column lists the three groups that failed most ofte
 
 | Date | Model | Attempts | Mean score | Pass rate | Notes |
 |---|---|---|---|---|---|
-| | | | | | |
+| 2026-11-20 | claude-opus-5-5 | 5 | 1.000 | 5/5 (100%) | all passed |
+| 2026-11-20 | claude-haiku-5-5 | 5 | 1.000 | 5/5 (100%) | all passed |
